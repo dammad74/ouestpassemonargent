@@ -1,0 +1,186 @@
+// Prisma schema for "Où est passé mon argent ?"
+// Compatible with PostgreSQL 15+
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+}
+
+enum TransactionCategory {
+  COURSES
+  RESTAURANTS
+  FAST_FOOD
+  ESSENCE
+  TRANSPORT
+  SHOPPING
+  AMAZON
+  SANTE
+  LOGEMENT
+  LOISIRS
+  ABONNEMENTS
+  VOYAGES
+  AUTRE
+}
+
+enum AlertType {
+  SUBSCRIPTION_INCREASE
+  UNUSUAL_EXPENSE
+  EXCEPTIONAL_EXPENSE
+  CATEGORY_SURGE
+}
+
+enum SubscriptionFrequency {
+  MONTHLY
+  YEARLY
+}
+
+model User {
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String?
+  name            String?
+  avatarUrl       String?
+  role            Role             @default(USER)
+  isPremium       Boolean          @default(false)
+  premiumExpiresAt DateTime?
+  revolutPayCustomerId String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  // Revolut Open Banking OAuth Connection
+  revolutAccounts  RevolutAccount[]
+  transactions    Transaction[]
+  subscriptions   Subscription[]
+  alerts          SmartAlert[]
+  monthlyReports  MonthlyReport[]
+  paymentOrders   PaymentOrder[]
+}
+
+model RevolutAccount {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revolutId       String       @unique // Revolut Account ID
+  name            String
+  currency        String       @default("EUR")
+  balance         Float        @default(0.0)
+  accessToken     String?      @db.Text
+  refreshToken    String?      @db.Text
+  tokenExpiresAt  DateTime?
+  lastSyncedAt    DateTime?
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  transactions    Transaction[]
+}
+
+model Transaction {
+  id              String              @id @default(uuid())
+  userId          String
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId       String?
+  account         RevolutAccount?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  revolutTxId     String?             @unique
+  date            DateTime
+  amount          Float               // Positive float
+  type            TransactionType     @default(EXPENSE)
+  category        TransactionCategory @default(AUTRE)
+  merchant        String
+  description     String?
+  currency        String              @default("EUR")
+  status          String              @default("completed")
+  isSubscription  Boolean             @default(false)
+  subscriptionId  String?
+  subscription    Subscription?       @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  source          String              @default("revolut_api")
+  createdAt       DateTime            @default(now())
+
+  @@index([userId, date])
+  @@index([userId, category])
+}
+
+model Subscription {
+  id              String                @id @default(uuid())
+  userId          String
+  user            User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  merchantPattern String
+  amount          Float
+  previousAmount  Float?
+  frequency       SubscriptionFrequency @default(MONTHLY)
+  nextBillingDate DateTime?
+  category        TransactionCategory   @default(ABONNEMENTS)
+  isActive        Boolean               @default(true)
+  hasIncreased    Boolean               @default(false)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  transactions    Transaction[]
+}
+
+model SmartAlert {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            AlertType
+  title           String
+  description     String
+  amount          Float?
+  previousAmount  Float?
+  percentage      Float?
+  category        TransactionCategory?
+  severity        String      @default("medium") // low, medium, high
+  isRead          Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+
+  @@index([userId, isRead])
+}
+
+model MonthlyReport {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthKey            String   // e.g. "2026-10"
+  totalSpent          Float
+  totalReceived       Float
+  netSavings          Float
+  biggestExpenseName  String?
+  biggestExpenseAmount Float?
+  mainCategoryName    String?
+  mainCategoryAmount  Float?
+  mainCategoryPercent Float?
+  comparisonPercent   Float?
+  dailyAverage        Float?
+  generatedAt         DateTime @default(now())
+
+  @@unique([userId, monthKey])
+}
+
+model PaymentOrder {
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  revolutOrderId  String      @unique
+  amount          Float       @default(3.99)
+  currency        String      @default("EUR")
+  status          String      // PENDING, COMPLETED, CANCELLED
+  plan            String      @default("PREMIUM_MONTHLY")
+  checkoutUrl     String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}

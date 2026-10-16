@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ou_est_passe_mon_argent_app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://revolut_user:secretpassword123@postgres:5432/ou_est_passe_mon_argent_db?schema=public
+      - REVOLUT_CLIENT_ID=your_revolut_client_id
+      - REVOLUT_REDIRECT_URI=http://localhost:3000/api/auth/revolut/callback
+      - REVOLUT_PAY_MERCHANT_KEY=your_revolut_pay_secret_key
+      - JWT_SECRET=super_secret_jwt_key_revolut_saas_2026
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ou_est_passe_mon_argent_db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=revolut_user
+      - POSTGRES_PASSWORD=secretpassword123
+      - POSTGRES_DB=ou_est_passe_mon_argent_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U revolut_user -d ou_est_passe_mon_argent_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+    driver: local

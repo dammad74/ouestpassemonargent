@@ -1,0 +1,6 @@
+{
+  "name": "Où est passé mon argent ?",
+  "description": "Analysez automatiquement vos dépenses Revolut et découvrez simplement où part votre argent chaque mois.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
